@@ -78,7 +78,6 @@ void   dstr_trim_right(DString *str);
 void   dstr_reverse(DString *str);
 void   dstr_to_upper(DString *str);
 void   dstr_to_lower(DString *str);
-void   dstr_fill(DString *str, char ch);
 size_t dstr_count(const DString *str, char ch);
 
 #endif
