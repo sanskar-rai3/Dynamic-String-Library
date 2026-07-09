@@ -10,6 +10,22 @@ typedef struct DString {
 	size_t capacity;
 } DString;
 
+typedef enum DStringError {
+	DSTR_SUCCESS = 0,
+	DSTR_ERROR_ALLOC_FAILED,
+	DSTR_ERROR_OUT_OF_BOUNDS,
+	DSTR_ERROR_NULL_ARGUMENT,
+	DSTR_ERROR_INVALID_SIZE,
+	DSTR_ERROR_NOT_FOUND,
+	DSTR_ERROR_COUNT
+} DStringError;
+
+/* Error Handling */
+void dstr_set_error_code(DStringError code);
+DStringError dstr_get_error_code(void);
+const char *dstr_get_error_string(void);
+void dstr_clear_error_code(void);
+
 /* Construction / Destruction */
 DString dstr_create(void);
 DString dstr_from_cstr(const char *str);
