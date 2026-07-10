@@ -4,6 +4,19 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#ifndef Thread_Local
+    #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+        #define Thread_Local _Thread_local
+    #elif defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
+        #define Thread_Local __thread
+    #elif defined(_MSC_VER)
+        #define Thread_Local __declspec(thread)
+    #else
+        #define Thread_Local static
+        #warning "Compiler thread-local storage support undetected. Error handling fallback applied."
+    #endif
+#endif
+
 /* Static Datas */
 static const char *const g_dstr_error_strings[] = {
 	[DSTR_SUCCESS]             = "",
@@ -14,7 +27,8 @@ static const char *const g_dstr_error_strings[] = {
 	[DSTR_ERROR_NOT_FOUND]     = "Substring or character target not found"
 };
 
-static DStringError g_dstr_last_error = DSTR_SUCCESS;
+
+static Thread_Local DStringError g_dstr_last_error = DSTR_SUCCESS;
 
 /* Error Handling */
 
