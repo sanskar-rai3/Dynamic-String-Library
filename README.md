@@ -184,7 +184,6 @@ if (dstr_get_error_code() == DSTR_ERROR_NOT_FOUND) {
 
 ## Notes and known limitations
 
-- **Not thread-safe.** The error code is a single global (`g_dstr_last_error`); concurrent use from multiple threads will race.
 - **`dstr_find`/`dstr_find_cstr`/`dstr_replace` are `strstr`-based**, so a `needle`/`old` containing an embedded `'\0'` byte will be truncated at the first NUL rather than matched by its full tracked length.
 - **`int`-based indices.** `dstr_find`, `dstr_find_cstr`, and `dstr_rfind` return `int`, so results on strings larger than `INT_MAX` bytes aren't representable — not a concern for typical use, but worth knowing.
 - **`dstr_at`/`dstr_front`/`dstr_back` return `'\0'` on error** as well as when `'\0'` is a legitimately stored character — check `dstr_get_error_code()` if you need to distinguish the two.
