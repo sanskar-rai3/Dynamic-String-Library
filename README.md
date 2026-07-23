@@ -1,26 +1,6 @@
 # dstring
 
-A small, dependency-free dynamic string library for C, in the spirit of C++'s `std::string` — growable buffers, length tracking, and a consistent error-reporting model, all in plain C11.
-
-## Features
-
-- Automatic buffer growth (geometric doubling) for append, insert, and resize operations
-- Explicit length tracking (`len`), so embedded `'\0'` bytes are supported by most operations that don't rely on `strstr`/`strlen` internally
-- Always null-terminated, so a `DString` can be passed anywhere a `const char *` is expected via `dstr_cstr()`
-- A single global error code (`DStringError`) set by every call, so you can check what went wrong without out-parameters
-- No dependencies beyond the C standard library (`stdlib.h`, `string.h`, `stddef.h`, `stdbool.h`)
-
-## Building
-
-There's no build system bundled — drop `dstring.h` and `dstring.c` into your project and compile them alongside your own sources:
-
-```sh
-gcc -std=c11 -Wall -Wextra -c dstring.c -o dstring.o
-```
-
-Then link `dstring.o` into your project as usual, or just add `dstring.c` to your existing build.
-
-## Quick example
+A small, dependency-free dynamic string library for C, in the spirit of C++'s `std::string` — growable buffers, explicit length tracking, and a consistent error-reporting model, all in plain C11.
 
 ```c
 #include <stdio.h>
@@ -39,6 +19,35 @@ int main(void) {
 }
 ```
 
+## Features
+
+- Automatic buffer growth (geometric doubling) for append, insert, and resize operations
+- Explicit length tracking (`len`), so most operations that don't rely on `strstr`/`strlen` internally support embedded `'\0'` bytes
+- Always null-terminated, so a `DString` can be passed anywhere a `const char *` is expected via `dstr_cstr()`
+- A single global error code (`DStringError`), set by every call, checkable without out-parameters
+- Zero dependencies beyond the C standard library (`stdlib.h`, `string.h`, `stddef.h`, `stdbool.h`)
+
+## Table of contents
+
+- [Building](#building)
+- [The `DString` type](#the-dstring-type)
+- [Error handling](#error-handling)
+- [API reference](#api-reference)
+- [Notes and known limitations](#notes-and-known-limitations)
+- [License](#license)
+
+## Building
+
+There's no build system bundled — drop `dstring.h` and `dstring.c` into your project and compile them alongside your own sources:
+
+```sh
+gcc -std=c11 -Wall -Wextra -c dstring.c -o dstring.o
+```
+
+Then link `dstring.o` into your project, or just add `dstring.c` directly to your existing build (CMake, Make, etc.).
+
+Example programs demonstrating the API are available in the `demo/` directory.
+
 ## The `DString` type
 
 ```c
@@ -49,22 +58,20 @@ typedef struct {
 } DString;
 ```
 
-`DString` is a plain value type — it's returned by value from constructors and can be copied by assignment, but the `buffer` it owns must be released exactly once with `dstr_destroy()`. Copying a `DString` with `=` copies the pointer, not the data — use `dstr_copy()` for a deep copy.
+`DString` is a plain value type. It's returned by value from constructors, and its fields are safe to read directly, but:
 
-Example programs demonstrating the library's API are available in the `demo/` directory.
-
+- **The buffer must be released exactly once**, via `dstr_destroy()`.
+- **`=` copies the pointer, not the data.** Assigning one `DString` to another (`DString b = a;`) gives you two structs pointing at the same heap buffer — destroying one and then using the other is a use-after-free, and destroying both double-frees. Use `dstr_copy()` (or `dstr_copy_cstr()`) whenever you need an independent, owned copy.
 
 ## Error handling
 
-Every function sets a global error code, retrievable via:
+Every function sets a **single global error code**, retrievable at any time:
 
 ```c
 DStringError dstr_get_error_code(void);
 const char  *dstr_get_error_string(void);
 void         dstr_clear_error_code(void);
 ```
-
-Possible codes:
 
 | Code | Meaning |
 |---|---|
@@ -75,14 +82,27 @@ Possible codes:
 | `DSTR_ERROR_INVALID_SIZE` | Requested size/capacity is invalid |
 | `DSTR_ERROR_NOT_FOUND` | Search target wasn't found |
 
-The error code is **global**, not per-`DString`, and this library assumes a **single-threaded** program — it is not thread-safe as-is.
-
 ```c
 dstr_find_cstr(&s, "xyz");
 if (dstr_get_error_code() == DSTR_ERROR_NOT_FOUND) {
     // handle it
 }
 ```
+
+> [!IMPORTANT]
+> **Check the error code immediately after the call that can fail — before calling any other `dstr_*` function.** Nearly every function in this library, including read-only accessors like `dstr_len()` and `dstr_empty()`, resets the global error code to `DSTR_SUCCESS` on their own success path. If anything else runs between the risky call and your check, the failure you're looking for can be silently overwritten:
+>
+> ```c
+> dstr_append_cstr(&s, big_string);   // suppose this fails (alloc)
+> size_t n = dstr_len(&s);            // this call resets the error code to SUCCESS
+> if (dstr_get_error_code() == DSTR_ERROR_ALLOC_FAILED) {
+>     // never reached — the failure was already overwritten
+> }
+> ```
+>
+> This is the same class of hazard as libc's `errno`: treat the global as valid for exactly one check, right after the call that set it.
+
+The error code is **global, not per-`DString`**, and this library assumes a **single-threaded** program — it is not thread-safe as written.
 
 ## API reference
 
@@ -168,7 +188,7 @@ if (dstr_get_error_code() == DSTR_ERROR_NOT_FOUND) {
 | Function | Description |
 |---|---|
 | `DString dstr_substr(const DString *str, size_t pos, size_t len)` | New `DString` copied from a slice |
-| `void dstr_replace(DString *str, const DString *old, const DString *replacement)` | Replace all non-overlapping occurrences of `old` with `replacement` |
+| `void dstr_replace(DString *str, const DString *old, const DString *replacement)` | Replace all non-overlapping occurrences of `old` with `replacement`, left to right |
 
 ### Utilities
 
@@ -184,13 +204,14 @@ if (dstr_get_error_code() == DSTR_ERROR_NOT_FOUND) {
 
 ## Notes and known limitations
 
-- **`dstr_find`/`dstr_find_cstr`/`dstr_replace` are `strstr`-based**, so a `needle`/`old` containing an embedded `'\0'` byte will be truncated at the first NUL rather than matched by its full tracked length.
-- **`int`-based indices.** `dstr_find`, `dstr_find_cstr`, and `dstr_rfind` return `int`, so results on strings larger than `INT_MAX` bytes aren't representable — not a concern for typical use, but worth knowing.
-- **`dstr_at`/`dstr_front`/`dstr_back` return `'\0'` on error** as well as when `'\0'` is a legitimately stored character — check `dstr_get_error_code()` if you need to distinguish the two.
-- **ASCII-only case conversion and whitespace trimming** — no locale or Unicode awareness.
+- **`dstr_find`/`dstr_find_cstr`/`dstr_replace` are `strstr`-based.** A `needle`/`old` containing an embedded `'\0'` byte will be truncated at the first NUL rather than matched against its full tracked length. `dstr_rfind` doesn't share this limitation, since it compares with `memcmp` over the full tracked length.
+- **`int`-based indices.** `dstr_find`, `dstr_find_cstr`, and `dstr_rfind` return `int`, so results on strings larger than `INT_MAX` bytes aren't representable. Not a concern for typical use, but worth knowing if you're working with very large buffers.
+- **`dstr_at`/`dstr_front`/`dstr_back` return `'\0'` on error**, which is indistinguishable from a legitimately stored `'\0'` character — check `dstr_get_error_code()` if you need to tell the two apart.
+- **ASCII-only case conversion and whitespace trimming.** No locale or Unicode awareness; multi-byte UTF-8 sequences pass through `dstr_to_upper`/`dstr_to_lower` unmodified but non-ASCII whitespace (e.g. U+00A0) is not trimmed.
+- **The global error code is a single point of failure for diagnostics.** Because it's overwritten by nearly every call, including read-only accessors, don't rely on it surviving more than one call after the operation you're checking. See [Error handling](#error-handling) above.
 
 ## License
 
 This project is licensed under the MIT License.
 
-Full license text is available in the 'LICENSE' file.
+Full license text is available in the `LICENSE` file.
