@@ -22,14 +22,14 @@
  *SOFTWARE.
  */
 
-#ifndef __D_STRING__
-#define __D_STRING__
+#ifndef D_STRING_H
+#define D_STRING_H
 
 #include <stddef.h>
 #include <stdbool.h>
 
 typedef struct DString {
-	char   *buffer;
+	char  *buffer;
 	size_t len;
 	size_t capacity;
 } DString;
@@ -45,10 +45,10 @@ typedef enum DStringError {
 } DStringError;
 
 /* Error Handling */
-void dstr_set_error_code(DStringError code);
+void         dstr_set_error_code(DStringError code);
 DStringError dstr_get_error_code(void);
-const char *dstr_get_error_string(void);
-void dstr_clear_error_code(void);
+const char  *dstr_get_error_string(void);
+void         dstr_clear_error_code(void);
 
 /* Construction / Destruction */
 DString dstr_create(void);
@@ -120,4 +120,4 @@ void   dstr_to_upper(DString *str);
 void   dstr_to_lower(DString *str);
 size_t dstr_count(const DString *str, char ch);
 
-#endif
+#endif /* D_STRING_H */
